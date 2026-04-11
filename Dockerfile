@@ -20,7 +20,7 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
  
 # Copy built JAR
-COPY --from=builder /app/target/pipeline.jar app.jar
+COPY --from=builder /app/target/*.jar app.jar
  
 RUN chown appuser:appgroup app.jar
  
