@@ -1,0 +1,125 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION       = "ap-south-1"                          // Change to your AWS region
+        AWS_ACCOUNT_ID   = "123456789012"                        // Change to your AWS Account ID
+        ECR_REPO_NAME    = "pipeline"                            // ECR repository name
+        ECR_REGISTRY     = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        IMAGE_NAME       = "${ECR_REGISTRY}/${ECR_REPO_NAME}"
+        DOCKER_TAG       = "${BUILD_NUMBER}"
+        AWS_CRED         = "aws-credentials-id"                  // Jenkins AWS credential ID
+    }
+
+    tools {
+        maven 'Maven-3.9'    // Must match Jenkins Global Tool Configuration name
+        jdk   'JDK-17'       // Must match Jenkins Global Tool Configuration name
+    }
+
+    triggers {
+        pollSCM('H/5 * * * *')   // Poll GitHub every 5 minutes
+    }
+
+    stages {
+
+        // ─── Stage 1: Checkout ───────────────────────────────────────────
+        stage('Checkout') {
+            steps {
+                echo "Checking out from GitHub..."
+                git branch: 'main',
+                    url: 'https://github.com/kamalesh-parthiban/pipeline.git'
+            }
+        }
+
+        // ─── Stage 2: Build JAR ──────────────────────────────────────────
+        stage('Build') {
+            steps {
+                echo "Building JAR using Maven..."
+                sh 'mvn clean package -DskipTests'
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                    echo "JAR archived successfully."
+                }
+            }
+        }
+
+        // ─── Stage 3: Test ───────────────────────────────────────────────
+        stage('Test') {
+            steps {
+                echo "Running unit tests..."
+                sh 'mvn test'
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        // ─── Stage 4: Docker Build ───────────────────────────────────────
+        stage('Docker Build') {
+            steps {
+                echo "Building Docker image: ${IMAGE_NAME}:${DOCKER_TAG}"
+                sh """
+                    docker build -t ${IMAGE_NAME}:${DOCKER_TAG} .
+                    docker tag ${IMAGE_NAME}:${DOCKER_TAG} ${IMAGE_NAME}:latest
+                """
+            }
+        }
+
+        // ─── Stage 5: Login & Push to ECR ────────────────────────────────
+        stage('Push to ECR') {
+            steps {
+                echo "Logging in to AWS ECR and pushing image..."
+                withCredentials([usernamePassword(
+                    credentialsId: "${AWS_CRED}",
+                    usernameVariable: 'AWS_ACCESS_KEY_ID',
+                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                )]) {
+                    sh """
+                        # Configure AWS CLI
+                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
+
+                        # Authenticate Docker to ECR
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+                        # Create ECR repo if it doesn't exist
+                        aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} || \
+                            aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION}
+
+                        # Push both tags
+                        docker push ${IMAGE_NAME}:${DOCKER_TAG}
+                        docker push ${IMAGE_NAME}:latest
+
+                        echo "Image pushed: ${IMAGE_NAME}:${DOCKER_TAG}"
+                    """
+                }
+            }
+        }
+
+    }
+
+    // ─── Post Actions ─────────────────────────────────────────────────────
+    post {
+        success {
+            echo "✅ Build #${BUILD_NUMBER} pushed to ECR successfully!"
+            echo "Image: ${IMAGE_NAME}:${DOCKER_TAG}"
+        }
+        failure {
+            echo "❌ Build #${BUILD_NUMBER} failed. Check the logs."
+        }
+        always {
+            // Clean up local Docker images to free disk space
+            sh """
+                docker rmi ${IMAGE_NAME}:${DOCKER_TAG} || true
+                docker rmi ${IMAGE_NAME}:latest || true
+            """
+            cleanWs()
+        }
+    }
+}
