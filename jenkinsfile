@@ -73,11 +73,12 @@ pipeline {
         stage('Push to ECR') {
             steps {
                 echo "Logging in to AWS ECR and pushing image..."
-                withCredentials([usernamePassword(
-                    credentialsId: "${AWS_CRED}",
-                    usernameVariable: 'AWS_ACCESS_KEY_ID',
-                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                )]) {
+                withCredentials([[                                    // open the credentials block
+                    $class: 'AmazonWebServicesCredentialsBinding',   // tell Jenkins this is AWS type credential
+                    credentialsId: "${AWS_CRED}",                    // which credential to use (your Jenkins credential ID)
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',          // store Access Key in this variable
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'       // store Secret Key in this variable
+                ]]) {
                     sh """
                         # Configure AWS CLI
                         export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
