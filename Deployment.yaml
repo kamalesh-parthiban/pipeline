@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: pipeline
-          image: kamalesh/pipeline:latest     # Updated by Jenkins with BUILD_NUMBER
+          image: IMAGE_PLACEHOLDER
           ports:
             - containerPort: 8080
           resources:
