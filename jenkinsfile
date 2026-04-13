@@ -136,12 +136,12 @@ pipeline {
                         export AWS_DEFAULT_REGION=${AWS_REGION}
 
                         sed -i 's|IMAGE_PLACEHOLDER|${IMAGE_NAME}:${DOCKER_TAG}|g' \
-                            k8s/deployment.yaml
+                            Deployment.yaml
 
-                        kubectl apply -f k8s/deployment.yaml \
+                        kubectl apply -f Deployment.yaml \
                             --namespace=${K8S_NAMESPACE}
 
-                        kubectl rollout status deployment/pipeline-app \
+                        kubectl rollout status deployment/pipeline \
                             --namespace=${K8S_NAMESPACE} \
                             --timeout=120s
 
