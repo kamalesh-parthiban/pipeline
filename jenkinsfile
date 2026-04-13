@@ -9,7 +9,7 @@ pipeline {
         IMAGE_NAME       = "${ECR_REGISTRY}/${ECR_REPO_NAME}"
         DOCKER_TAG       = "${BUILD_NUMBER}"
         AWS_CRED         = "aws-credentials-id"                  // Jenkins AWS credential ID
-        EKS_CLUSTER_NAME = "your-eks-cluster-name"
+        EKS_CLUSTER_NAME = "my-eks-cluster"
         K8S_NAMESPACE    = "default"
     }
 
